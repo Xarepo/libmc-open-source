@@ -1,0 +1,27 @@
+Xarepo Micro Containers (MC)
+
+This is the open source release of Xarepo's micro container library
+for C.
+
+This first pre-release contains only a small subset of it, but as unit
+tests are completed and signed off during the coming months more
+components will be added.
+
+LICENSE
+-------
+
+This code is distributed under the ISC license which is a simplified
+BSD license. This means that you can use this code basically any way
+you want in both open source and commercial closed source projects,
+just keep the copyright statements intact.
+
+The twist with the ISC licence compared to the BSD license is that you
+do not need to put credits in the documentation, which makes it easier
+to include the code in any project.
+
+For your convenience you may also choose the more well-known MIT
+license if that suits your project better. For any other types of
+licensing, contact us.
+
+As usual there is no warranty.
+

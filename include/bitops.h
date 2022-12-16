@@ -329,11 +329,11 @@ bit64_bsf_generic(const uint64_t value)
 static inline unsigned
 bit64_bsf(const uint64_t value)
 {
-#if ARCH_SIZEOF_INT >= 8
+#if ARCH_SIZEOF_INT >= 8 && __has_builtin(__builtin_ctz)
     return (unsigned)__builtin_ctz((unsigned)value);
-#elif ARCH_SIZEOF_LONG >= 8
+#elif ARCH_SIZEOF_LONG >= 8 && __has_builtin(__builtin_ctzl)
     return (unsigned)__builtin_ctzl((unsigned long)value);
-#elif ARCH_SIZEOF_LONG_LONG >= 8
+#elif ARCH_SIZEOF_LONG_LONG >= 8 && __has_builtin(__builtin_ctzll)
     return (unsigned)__builtin_ctzll((unsigned long long)value);
 #else
     const uint32_t lobits = value & 0xFFFFFFFFu;
@@ -347,7 +347,7 @@ bit64_bsf(const uint64_t value)
 static inline unsigned
 bit64_bsr_generic(const uint64_t value)
 {
-    const uint32_t hibits = value >> 32u;
+    const uint32_t hibits = (const uint32_t)(value >> 32u);
     if (hibits != 0) {
         return 32u + bit32_bsr_generic(hibits);
     }
@@ -357,14 +357,14 @@ bit64_bsr_generic(const uint64_t value)
 static inline unsigned
 bit64_bsr(const uint64_t value)
 {
-#if ARCH_SIZEOF_INT == 8
+#if ARCH_SIZEOF_INT == 8 && __has_builtin(__builtin_ctz)
     return 63u - (unsigned)__builtin_clz((unsigned)value);
-#elif ARCH_SIZEOF_LONG == 8
+#elif ARCH_SIZEOF_LONG == 8 && __has_builtin(__builtin_ctzl)
     return 63u - (unsigned)__builtin_clzl((unsigned long)value);
-#elif ARCH_SIZEOF_LONG_LONG == 8
+#elif ARCH_SIZEOF_LONG_LONG == 8 && __has_builtin(__builtin_ctzll)
     return 63u - (unsigned)__builtin_clzll((unsigned long long)value);
 #else
-    const uint32_t hibits = value >> 32;
+    const uint32_t hibits = (const uint32_t)(value >> 32);
     if (hibits != 0) {
         return 32 + bit32_bsr(hibits);
     }
@@ -450,9 +450,23 @@ bit64_count(uint64_t v)
 #else
 #define bit_swap16 bit_swap16_generic
 #endif
+
+static inline uint32_t
+bit_swap32_generic(uint32_t v)
+{
+    return bit_swap16((uint16_t)((v & 0xFFFF0000u ) >> 16u)) |
+        ((uint32_t)bit_swap16((uint16_t)(v & 0x0000FFFFu)) << 16u);
+}
 #if __has_builtin(__builtin_bswap32)
 #define bit_swap32 __builtin_bswap32
 #endif
+
+static inline uint64_t
+bit_swap64_generic(uint64_t v)
+{
+    return bit_swap32((uint32_t)((v & 0xFFFFFFFF00000000u ) >> 32u)) |
+        ((uint64_t)bit_swap32((uint32_t)(v & 0xFFFFFFFFu)) << 32u);
+}
 #if __has_builtin(__builtin_bswap64)
 #define bit_swap64 __builtin_bswap64
 #endif
@@ -798,9 +812,9 @@ barr32_count(const uint32_t bits[],
     uint32_t bb = bs[from >> 5u].u32;
     bb &= ~(((uint32_t)1u << (from & 0x1Fu)) - 1);
     unsigned count = 0;
-    if (to >> 5u > from >> 5u) {
+    if ((to >> 5u) > (from >> 5u)) {
         count += bit32_count(bb);
-        for (unsigned i = (from >> 5u) + 1; i < to >> 5u; i++) {
+        for (unsigned i = (from >> 5u) + 1; i < (to >> 5u); i++) {
             count += bit32_count(bs[i].u32);
         }
         bb = bs[to >> 5u].u32;
@@ -821,9 +835,9 @@ barr64_count(const uint64_t bits[],
     uint64_t bb = bs[from >> 6u].u64;
     bb &= ~(((uint64_t)1u << (from & 0x3Fu)) - 1);
     unsigned count = 0;
-    if (to >> 6u > from >> 6u) {
+    if ((to >> 6u) > (from >> 6u)) {
         count += bit64_count(bb);
-        for (unsigned i = (from >> 6u) + 1; i < to >> 6u; i++) {
+        for (unsigned i = (from >> 6u) + 1; i < (to >> 6u); i++) {
             count += bit64_count(bs[i].u64);
         }
         bb = bs[to >> 6u].u64;
@@ -850,7 +864,7 @@ barr32_bsf(const uint32_t bits[],
 	}
 	return (int)i;
     }
-    for (i = (from >> 5u) + 1; i <= to >> 5u; i++) {
+    for (i = (from >> 5u) + 1; i <= (to >> 5u); i++) {
 	if (bs[i].u32 != 0) {
 	    if ((i = bit32_bsf(bs[i].u32) + (i << 5u)) > to) {
 		return -1;
@@ -878,7 +892,7 @@ barr64_bsf(const uint64_t bits[],
 	}
 	return (int)i;
     }
-    for (i = (from >> 6u) + 1; i <= to >> 6u; i++) {
+    for (i = (from >> 6u) + 1; i <= (to >> 6u); i++) {
 	if (bs[i].u64 != 0) {
 	    if ((i = bit64_bsf(bs[i].u64) + (i << 6u)) > to) {
 		return -1;
@@ -965,7 +979,7 @@ barr32_notbsf(const uint32_t bits[],
 	}
 	return (int)i;
     }
-    for (i = (from >> 5u) + 1; i <= to >> 5u; i++) {
+    for (i = (from >> 5u) + 1; i <= (to >> 5u); i++) {
 	if (bs[i].u32 != 0xFFFFFFFFu) {
 	    if ((i = bit32_bsf(~bs[i].u32) + (i << 5u)) > to) {
 		return -1;
@@ -994,7 +1008,7 @@ barr64_notbsf(const uint64_t bits[],
 	}
 	return (int)i;
     }
-    for (i = (from >> 6u) + 1; i <= to >> 6u; i++) {
+    for (i = (from >> 6u) + 1; i <= (to >> 6u); i++) {
 	if (bs[i].u64 != 0xFFFFFFFFFFFFFFFFu) {
 	    if ((i = bit64_bsf(~bs[i].u64) + (i << 6u)) > to) {
 		return -1;

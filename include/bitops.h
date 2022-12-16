@@ -410,9 +410,9 @@ static inline unsigned
 bit32_count(uint32_t v)
 {
 #if ARCH_SIZEOF_INT >= 4 && __has_builtin(__builtin_popcount)
-    return __builtin_popcount((unsigned)v);
+    return (unsigned)__builtin_popcount((unsigned)v);
 #elif ARCH_SIZEOF_LONG >= 4 && __has_builtin(__builtin_popcountl)
-    return __builtin_popcountl((unsigned long)v);
+    return (unsigned)__builtin_popcountl((unsigned long)v);
 #else
     return bit32_count_generic(v);
 #endif
@@ -434,11 +434,11 @@ static inline unsigned
 bit64_count(uint64_t v)
 {
 #if ARCH_SIZEOF_INT == 8 && __has_builtin(__builtin_popcount)
-    return __builtin_popcount((unsigned)v);
+    return (unsigned)__builtin_popcount((unsigned)v);
 #elif ARCH_SIZEOF_LONG == 8 && __has_builtin(__builtin_popcountl)
-    return __builtin_popcountl((unsigned long)v);
+    return (unsigned)__builtin_popcountl((unsigned long)v);
 #elif ARCH_SIZEOF_LONGLONG == 8 && __has_builtin(__builtin_popcountll)
-    return __builtin_popcountll((unsigned long long)v);
+    return (unsigned)__builtin_popcountll((unsigned long long)v);
 #else
     return bit64_count_generic(v);
 #endif
@@ -459,6 +459,8 @@ bit_swap32_generic(uint32_t v)
 }
 #if __has_builtin(__builtin_bswap32)
 #define bit_swap32 __builtin_bswap32
+#else
+#define bit_swap32 bit_swap32_generic
 #endif
 
 static inline uint64_t
@@ -469,6 +471,8 @@ bit_swap64_generic(uint64_t v)
 }
 #if __has_builtin(__builtin_bswap64)
 #define bit_swap64 __builtin_bswap64
+#else
+#define bit_swap64 bit_swap64_generic
 #endif
 
 static inline void

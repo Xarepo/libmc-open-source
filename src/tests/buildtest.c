@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2022 Xarepo. All rights reserved.
+ *
+ * This program is open source under the ISC License.
+ *
+ */
 #if defined(LIBMC_MINI) || defined(LIBMC_COMPACT) || defined(LIBMC_FULL)
 #include <bitops.h>
 #include <mht_tmpl.h>

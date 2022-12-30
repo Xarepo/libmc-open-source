@@ -1,11 +1,35 @@
+
 Xarepo Micro Containers (MC)
 
-This is the open source release of Xarepo's micro container library
-for C.
+IN A NUTSHELL
+-------------
 
-This first pre-release contains only a small subset of it, but as unit
-tests are completed and signed off during the coming months more
-components will be added.
+The Xarepo micro containers is a set of containers (lists, trees,
+hashes etc) for C with an API similar to the popular STL containers in
+C++. Unlike for C++ there are for C no widespread standard all-around
+containers that can be used in any program. This library intends to
+fill this gap. While being accessible for the casual user, a lot of
+effort has been put in to make the containers perform well since
+performance is often a key aspect when using C.
+
+Through inlining, preprocessor code generation and compact and aligned
+memory management the performance is at peak of what the given data
+structure type allows. Memory management can optionally be adapted per
+container to fit special needs, for example static allocation for
+critical realtime sections.
+
+By making use of the C preprocessor typed containers can be generated,
+rather than just using void * for everything, overcoming the somewhat
+weak typing of the C language. This also allows for customizing the
+containers to exactly fit a special purpose.
+
+Due to the nature of the code, it requires C99 support from the
+compiler, and C11 for the parts using <stdatomic.h>. Builtins are used
+in places (bit operations etc), and the code is primarily developed
+and tested for GCC and Clang on Intel or ARM 32 or 64 bit, but should
+be easily portable to other compilers / hardware as needed. Note:
+currently only little endian mode is supported.
+
 
 LICENSE
 -------
@@ -25,3 +49,468 @@ licensing, contact us.
 
 As usual there is no warranty.
 
+
+EXAMPLES
+--------
+
+Want to start using key-to-value mappings, lists etc in the simplest
+possible way? See src/examples/example_basic.c
+
+Do you want to generate custom versions of the data types? See
+src/examples/example_advanced.c
+
+
+LIMITATIONS
+-----------
+
+C does not have polymorphism so every function for each type needs to
+be unique with a unique name. This library uses the pre-processor to
+generate this from common code. If you refactor code and change
+container type you will unlike in C++ need to replace function names
+too.
+
+In other words, it's not practical to write generic code that can
+accept and work on any container type (like C++ algorithms
+library). This library makes it easier to be a C programmer in many
+situations, but it does not transform C into C++.
+
+(It would be possible to extend this library with an algorithms
+template header generating code using same techniques like the
+containers. Maybe in a future release.)
+
+
+USER DOCUMENTATION
+------------------
+
+MC can be used in two modes, either link to it as a static lib or just
+include it as source code in the project. The less complex data
+structures are implemented 100% through inline functions directly in
+the included header file and thus do not need a separate library or
+object file.
+
+Micro container types are defined in template files, 'mxx_tmpl.h'. The
+template contains inline functions which implement the container
+type. If the implementation is large there are references to helper
+functions in a corresponding 'mxx_base.h' that do the major part of
+the work). The inline functions in the 'mxx_tmpl.h' files are just
+templates, to make them complete a set of pre-processor #define
+directives need to be filled in before #include <mxx_tmpl.h>. This
+allows for customizing the type to exactly fit the user's
+needs. However, if you leave out the directives a default datatype
+will be generated, usually an integer key (intptr_t) and a void *
+value.
+
+
+Overview of containers
+----------------------
+
+mrb - red-black tree, associative container with all-around
+properties. In nearly all cases you need a key to value mapping, this
+is the container you should use. Only when you have special
+performance needs you should look at other types. A property of this
+type of tree is that keys are always sorted, which can be handy at
+times.
+
+mrx - radix tree, associative container very good at searches especially
+for dynamically sized keys for example strings. Ideal for large
+dictionaries with low change rates and high search rates. Not suitable
+for small data sets as the initial memory overhead is quite large.
+
+The radix tree is typically faster in searching than the red-black
+tree also for fixed size keys. When there are many keys in the tree
+and many share the same prefix it can be much more space efficient
+than for example a red-black tree, since the prefix is stored in only
+once and shared by all keys, while in a red-black tree the keys are
+always stored in full length regardless if they share prefix with
+other keys. A drawback of this property is that the iterator is not
+just a pointer but an allocated structure which must be freed if not
+used in mrx_next() until it returns mrx_end().
+
+The radix tree sticks out by being the most complex data type in the
+library by a wide margin as in not "micro" in terms of code. It's
+however very fast and is included for that reason.
+
+mht - hash table which is single hashing, associative container with
+extremely high performance in the best case, but if used in an
+unsuitable way the performance can be very poor. Should only be used
+by those familiar with hash table properties. Since it is single
+hashing you need to match the hash function with the keys to avoid
+collisions. You also need good control of the keys, or else malicious
+key input could cause performance to plunge.
+
+mv - a dynamically resized array. Suitable for lists where insert and
+erase can be done from the back. It can also be used with a static
+pre-allocated array, and static size too in which case it becomes an
+array view (span).
+
+mld - double-linked list, sequence container. The most flexible list
+and the typical to use when there are no special needs.
+
+mls - single-linked list, sequence container. Since it is
+single-linked it is not as flexible as the double-linked list, but has
+the advantage that it is more cache efficient to add and remove
+elements since there is only one link that needs to be updated. Use
+this instead of the double-linked list if there is a need for the
+extra performance, and it works having only single links (not possible
+to traverse backwards in the list etc).
+
+mq - lifo/fifo queue, sequence container. Supports only static
+allocation (fixed size). Implemented as an array with head and tail
+index, and is thus very efficient.
+
+In short, 90% of the time you will be using the mrb if you need and
+associative container and mld or mv if you need a sequence container.
+
+The header files contain some documentation as well, together with
+some design notes of how the containers are implemented and which
+trade-offs there are.
+
+Additional components
+---------------------
+
+bitops.h - a self-contained header with common (and not so common) bit
+operations like bit scan forward/reverse, bit count and swap etc. Uses
+builtins (ie purpose-made hardware instructions) when possible.
+
+buddyalloc.h - buddy allocator which is used as backing to the node
+pool by the containers in performance memory management mode. This
+buddy allocator supports lock-free multi-threaded allocations.
+
+nodepool.h - node allocator to be run on top of buddyalloc, used by
+the containers in performance management mode. May be useful when
+making own higd performance data structures.
+
+Configure syntax
+----------------
+
+The micro containers are configured by setting up a few defines before
+including the header file. The same header can be included several
+times in the same file with different configuration settings. All the
+defines are undefined after used in the included header, so you
+don't need to undefine them manually before defining them again for a
+new include.
+
+/* no defines before the include - default datatype will be generated */
+#include <mld_tmpl.h>
+
+/* The following example sets up the double-linked list as a list of
+   constant strings, with copies. Note the use of the deconst
+   macro. Since the prefix is set to 'strls' functions will be named
+   'strls_*()' and will thus not collide with the default prefix
+   for this container which is 'mld'. */
+#define MC_PREFIX strls
+#define MC_VALUE_T const char *
+#define MC_COPY_VALUE(dest, src) dest = strdup(src)
+#define MC_FREE_VALUE(val) free(MC_DECONST(void *, val))
+#include <mld_tmpl.h>
+
+See the example code for more examples, src/examples/.
+
+
+Choosing container properties
+-----------------------------
+
+Here follows a step-by-step howto of how to pick a container and how
+to configure it to best suit your needs:
+
+1. Choose a suitable container type.
+
+Should it be a sequence (only values in some order, a list for
+example) or associative (key-to-value mapping)? Most associative
+containers can be configured to use only keys, that this to be a set
+of keys/values that can be looked up.
+
+Choose a proper container for your needs, based on what operations you
+need to perform, and what type of performance you need. Concerning
+performance, this requires some understanding of how hashtables, trees
+etc work and what their properties are. Each data structure has pros
+and cons, there's no single data structure that is best at
+everything. If performance is important and/or there are realtime
+requirements it is important to make an adequate choice.
+
+Before going to the next step and configuring the container, consider if
+you can use the default settings. For a sequence container this will
+be void * values, and for associative containers the key will
+(typically) be intptr_t and values void *. It may be tempting to
+create specific types for all situations, especially if you're used to
+a language with strong typing, but experience tells us that creating
+many similar types does not make the code easier to follow. The "least
+bad solution" is typically to use the default void pointer types when
+it fits the needs to avoid creating a huge amount of types.
+
+2. Choose memory management model.
+
+If maximum performance is not of importance than you should use the
+compact mode, which uses the least memory (at least for smaller data
+sets). For all containers that supports it the compact mode is the
+default and then you don't need to give any directives.
+
+The other modes are "performance" and "static", and this normally only
+used in real-time software or where performance is very important.
+
+The performance mode makes block allocations of nodes using a fast
+buddy allocator. Since it allocates in blocks there is some overhead,
+but if there are a few large instances instead of many small it will
+actually consume less memory than the compact mode in most cases since
+there is no header overhead per node. Memory debuggers may work a bit
+less good together with the buddy allocator since it does not use libc
+malloc. The performance compared to compact mode is typically quite
+small, since libc malloc (used im compact mode) is already highly
+tuned. But if you need the fastest, performance mode is what you
+should choose.
+
+There is also a static allocation mode, which means that all memory is
+pre-allocated when the container is created. This gives both
+high performance and good real-time properties, but the obvious
+drawback is that you need to pre-allocate for the maximum amount of
+nodes the container should be able to hold. The mode is typically only
+used in real-time software, or for those containers that only support
+this mode (such as the LIFO/FIFO queue).
+
+3. If associative container - choose key type.
+
+Some containers may only support a specific type of key (for example
+only strings). Here we assume the generic case.
+
+Pointer to key, or direct storage? Direct storage require fixed size
+keys (examples: 'unsigned int', 'struct my_key_struct'). Note that
+since functions are inline (and key argument is constant), there will
+be no stack copy of the key even though the value rather than the
+reference is given as argument. In other words, you don't not need to
+worry about performance in argument passing when using direct
+storage.
+
+Pointer to keys should only be used when the situation requires. Such
+a situation is when keys have dynamic size such as a string ('const
+char *'), or if the storage of keys is handled outside of the
+container, for example when several containers use the same keys.
+
+Concerning using the same keys in several containers, it can
+be messy and is generally not recommended. If keys are say 64 bits or
+smaller, there is no significant space (=performance) to save by
+re-using keys in several containers - then use direct storage
+instead.
+
+If the type is a pointer to the key then there are some extra
+considerations.
+
+First, should it be constant or non-constant? Since keys should not be
+changed when owned by the container, it is recommended to use const
+whenever possible. Const is however only strictly required when the
+key points to read-only memory, such as static strings. Compile time
+warnings may occur when ..._key() and other functions that return keys
+will return pointers to constant values, for example if keys need to
+be passed to a function which does not take a constant argument
+(despite not changing the contents). In some of these cases a deconst
+macro (MC_DECONST()) can be used as a work-around.
+
+Second, should the key be copied or not? Let the container copy/free
+the key itself unless there is some strong reason for handling key
+memory management externally. Reasons for not copying could be that
+the same keys are used in many containers or keys refer to static
+memory (such as constant strings).
+
+Do not use copying just to work around a const issue, if it can be
+solved safely with MC_DECONST() instead.
+
+3. Choose settings for container value.
+
+Perhaps no value at all? Value-less associative containers = sets.
+
+Fixed size values stored directly in the container nodes is more
+efficient than same values allocated separately. A small value type is
+more efficient than large.
+
+What type should mxx_insert(), mxx_val(), mxx_find() etc return? The
+default this to return the same type as the value is, which is often
+suitable if value is a pointer type (example: value is 'char *',
+returns 'char *'). An undefined value may have to be specified
+(default is 0/NULL), which is used for indicating failures mxx_find()
+miss for example.
+
+In some cases it may not be possible to define an undefined value, for
+example if the value is an integer and the whole integer range
+represent valid values. Then it may be suitable to instead return a
+reference to the value, which is often suitable for non-pointer type
+of values where there may be no natural "undefined" value. Example:
+value is 'int', returns 'int *'. Returning the reference to the value
+also allows direct manipulation of it in the container (without using
+mxx_setval()).
+
+Normally the insert functions take an argument for the value, but it
+is possible to skip that if the container is configured to return the
+reference to the value. Then the insert function will return a
+reference to the value which the user can fill in. This may be
+suitable for large fixed values (structs).
+
+Since the insert functions are inline, there will be no extra stack
+copy of the value even if it is given as an argument. Thus, to gain an
+advantage by skipping the insert argument the user should not make a
+stack copy of the value at all, but only directly fill in the value in
+the referenced position.
+
+Should the values be copied and freed by the container? This is only
+sensible when the value is of pointer type.
+
+If the value type is a pointer type (example 'char *') should it be
+const or not (that is 'const char *' or just 'char *')? If it is
+const, the container functions will return const types too, in other
+words - const in => const out. In some cases it is a problem if the
+container returns const values, but do not copy values just to get
+around that if it can be safely solved with MC_DECONST() instead.
+
+
+Iterators
+---------
+
+The containers use the iterator concept to traverse them. Example:
+
+  for (mld_it_t *it = mld_begin(tt); it != mld_end();
+       it = mld_next(it))
+  {
+     ...
+  }
+
+In practice the iterator is typically a pointer to a node in the
+container, but it depends, for some containers the iterator can be a
+structure totally unrelated to a node. It also depends on the
+container if an iterator is still valid after the container has been
+modified.
+
+For the two most common containers, the double-linked list and the
+red-black tree, the iterators are indeed pointers to nodes and they
+are still valid after other nodes have been added or removed. The
+iterators can thus be stored to be used later as direct pointers
+into the container. For example, the function *_iterase() can be used
+instead of *_erase() which means that there is no search involved in
+the erase so it will be much more efficient.
+
+You need to know the properties of the iterator for a specific
+container before you know if you can store it till later and it can
+therefore be considered risky, but the gain is so large that we still
+recommend use of it. A typical use is to store the iterator to the
+node so it can be later erased without searching or scanning the
+container.
+
+To get the first iterator you call the mxx_begin() function, and to
+test if you have reached the end you compare with mxx_end(), as seen
+in the for loop above. The mxx_end() function is most often a macro
+for NULL, but can also point out a position in memory specific for
+the given container, typically the position past the last element in
+an array.
+
+
+Variations between interfaces to different containers
+-----------------------------------------------------
+
+The functions provided with the red-black tree gives a good example of
+what can be done by a associative container, and the double-linked
+list for a sequence container. More specialised containers are
+typically more limited in what functions they can provide, which means
+that not all of functions are available for all containers, and some
+have specialised functions made possible through the special type
+of algorithm used.
+
+For example, while the double-linked list has an erase() function to
+delete a specific node, the single-linked list instead has an
+erase_after() function because the list does not have any link to the
+previous node.
+
+The parameters required for the same function may also vary between
+containers. The design is that no more parameters than required for
+the underlying data structure should be passed onto the user,
+accepting the drawback that there will be some minor differences
+between containers. For example one container may be able to get the
+next iterator by only getting the pointer to the current while an
+other container may need a pointer to that container object as well.
+
+
+Multithreading
+--------------
+
+The micro containers does not contain any locks, so it is the
+responsibility of the user to handle contention. However, any global
+data structures (if any) used by the implementation is thread
+safe. The containers are thus designed to be used in a multithreaded
+environment.
+
+
+DESIGNER'S NOTES
+----------------
+
+Actual container implementation can in whole or parts be generated by
+the C pre-processor from templates, this makes other types than 'void
+*' as values for containers is possible. In addition to better type
+checking, the compiler can often do better optimization with the code
+visible in headers.
+
+Large generic code blocks are put in helper functions to avoid too
+much code bloat through extensive inlining. There will however still
+be some more code in the binary than typical container implementations
+lead to.
+
+Compare callback functions (=some overhead) are avoided, macros are
+used instead.
+
+There is little or no encapsulation, but it is obvious which
+functions/data that should be used and not so mistakingly using
+internal data is not seen as a problem.
+
+When a container is generated, the function names are pre-pended with
+a user-specified prefix, so several containers with different
+key/value types can be generated from the same template. If no
+directives are given when including a container template a default
+type is generated (typically intptr_t key and void * value) with a
+default prefix.
+
+Function names are generally borrowed from C++ STL where applicable to
+make the API more familiar to STL users. Each function uses as few
+parameters as possible, despite that it can lead to that paramaters
+for the same function may differ between containers (example:
+mxx_next() may require both type and iterator for one container but
+only iterator for the other)
+
+Standard names for iterator functions:
+ - mxx_begin(), mxx_rbegin()
+ - mxx_end(), mxx_rend()
+ - mxx_next()
+ - mxx_prev()
+ - mxx_val()
+ - mxx_setval()
+ - mxx_key()
+
+ If there is only an iterator version, no iterator prefix is used
+ (example: mxx_next() instead of mxx_itnext()). If there are both
+ iterator and non-iterator versions, the 'it' prefix is used for the
+ iterator versions (example: mxx_erase() and mxx_iterase()). The 'it'
+ prefix is without underscore to make function name more compact.
+
+ New / delete:
+   - mxx_new() new using malloc().
+   - mxx_delete() delete using free().
+   - mxx_init() init pre-allocated area.
+
+Symbols which are not intended to be used by the API user but still
+visible in header files have names ending with underscore (examples:
+mxx_link_node_(), MXX_BLOCK_SIZE_).
+
+Depending on container type it may or may not be possible to delete
+while traversing, there is no strive to make all containers behave
+exactly the same, since it is not possible when striving for highest
+performance implementation of a specific data structure.
+
+Node allocation is a key aspect of container performance and there is
+therefore various memory management models. There is a compact mode,
+which focuses on low memory consumption rather than performance (uses
+libc malloc directly), a static allocation mode for pre-allocated data
+structures (can be useful in realtime contexts) and a performance
+block-based allocation scheme for maximum performance.
+
+It differs between containers which models that are supported, some
+support all, some only a subset.
+
+Regarding 'const': if the value type is made const (example: 'const
+char *'), also the return value will be const. This was a design
+choice. It is technically possible to do const in and non-const out,
+but we do not see a large enough need for that. Use the macro
+MC_DECONST() if a special case arises.

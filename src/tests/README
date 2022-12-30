@@ -1,0 +1,11 @@
+
+- The unit tests aims for 100% coverage, except for the
+  abort()/assert() cases.
+- Gcov is used to assess coverage.
+- In some cases the .c file is included in the unit test code to
+  provide access to static functions, which can make the gcov files
+  look a bit confusing, but the coverage is there.
+- Pseudorandom is used extensively, in some cases the number of
+  iterations have been increased to make sure the all the pseudorandom
+  combinations throughout the unit test reaches 100% code coverage.
+- Pseudorandom is used to make the tests exactly repeatable.

@@ -1,0 +1,37 @@
+#
+# To list all available checks:
+# clang-tidy -checks=* --list-checks
+#
+# Note that clang-tidy has mostly checks for C++
+#
+# Checks list explained:
+#   -* means start by removing all checks
+#   bugprone-* adds in all checks starting with bugprone-
+#   -blabla removes a single check named blabla
+#
+
+Checks: >
+  -*,
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  google-*,
+  hicpp-*,
+  linuxkernel-must-check-errs,
+  llvm-*,
+  misc-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -misc-no-recursion,
+  -hicpp-uppercase-literal-suffix,
+  -readability-magic-numbers,
+  -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -readability-uppercase-literal-suffix,
+  -readability-else-after-return,
+  -performance-no-int-to-ptr,
+  -bugprone-easily-swappable-parameters,
+  -llvm-else-after-return,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling

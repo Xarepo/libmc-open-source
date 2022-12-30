@@ -38,8 +38,14 @@
   barr*_notbsf  - inverted bit scan forward in a range
   barr*_notbsr  - inverted bit scan reverse in a range
 
-  bit sizes are 32 or 64, and if 'f32' is used, eg bitf32_set(), the same size
-  as uint_fast32_t is used, which may be 64 rather than 32.
+  bit sizes are 32 and 64. It's also possible to generate custom functions for
+  other 32 and 64 bit types, by setting defines before import, like this:
+
+#define BITOPS_PREFIX bitf32
+#define BITOPS_BARR_PREFIX barrf32 // (optional)
+#define BITOPS_TYPE uint_fast32_t
+#define BITOPS_TYPE_WIDTH 32 // (or BITOPS_TYPE_MAX 2147483647 / 4294967295u)
+#include <bitops.h>
 
 */
 
@@ -90,56 +96,6 @@
 #endif
 #endif
 
-#if INT_FAST32_MAX == 9223372036854775807
-typedef uint64_t bitf32_t;
-#define bitf32_isset bit64_isset
-#define bitf32_set bit64_set
-#define bitf32_unset bit64_unset
-#define bitf32_bsf bit64_bsf
-#define bitf32_bsr bit64_bsr
-#define bitf32_rev bit64_rev
-#define bitf32_count bit64_count
-#define bitf32_swap bit64_swap
-#define barrf32_set barr64_set
-#define barrf32_unset barr64_unset
-#define barrf32_not barr64_not
-#define barrf32_and barr64_and
-#define barrf32_nand barr64_nand
-#define barrf32_or barr64_or
-#define barrf32_nor barr64_nor
-#define barrf32_xor barr64_xor
-#define barrf32_xnor barr64_xnor
-#define barrf32_count barr64_count
-#define barrf32_bsf barr64_bsf
-#define barrf32_bsr barr64_bsr
-#define barrf32_notbsf barr64_notbsf
-#define barrf32_notbsr barr64_notbsr
-#else
-typedef uint32_t bitf32_t;
-#define bitf32_isset bit32_isset
-#define bitf32_set bit32_set
-#define bitf32_unset bit32_unset
-#define bitf32_bsf bit32_bsf
-#define bitf32_bsr bit32_bsr
-#define bitf32_rev bit32_rev
-#define bitf32_count bit32_count
-#define bitf32_swap bit32_swap
-#define barrf32_set barr32_set
-#define barrf32_unset barr32_unset
-#define barrf32_not barr32_not
-#define barrf32_and barr32_and
-#define barrf32_nand barr32_nand
-#define barrf32_or barr32_or
-#define barrf32_nor barr32_nor
-#define barrf32_xor barr32_xor
-#define barrf32_xnor barr32_xnor
-#define barrf32_count barr32_count
-#define barrf32_bsf barr32_bsf
-#define barrf32_bsr barr32_bsr
-#define barrf32_notbsf barr32_notbsf
-#define barrf32_notbsr barr32_notbsr
-#endif // INT_FAST32_MAX == 9223372036854775807
-
 /* bit_all32 / bit_all64 unions are used to avoid aliasing issues in casts */
 union bitunion32 {
     uint32_t u32;
@@ -176,7 +132,7 @@ bit32_isset(const uint32_t bits[],
 {
     const union bitunion32 *bs = (const union bitunion32 *)bits;
     const unsigned i = position >> 5u;
-    return !!(bs[i].u32 & (uint32_t)1u << (position - (i << 5u)));
+    return !!(bs[i].u32 & (uint32_t)1u << (position & 0x1Fu));
 }
 static inline int
 bit64_isset(const uint64_t bits[],
@@ -184,7 +140,7 @@ bit64_isset(const uint64_t bits[],
 {
     const union bitunion64 *bs = (const union bitunion64 *)bits;
     const unsigned i = position >> 6u;
-    return !!(bs[i].u64 & (uint64_t)1u << (position - (i << 6u)));
+    return !!(bs[i].u64 & (uint64_t)1u << (position & 0x3Fu));
 }
 
 static inline void
@@ -193,7 +149,7 @@ bit32_set(uint32_t bits[],
 {
     union bitunion32 *bs = (union bitunion32 *)bits;
     const unsigned i = position >> 5u;
-    bs[i].u32 = bs[i].u32 | (uint32_t)1u << (position - (i << 5u));
+    bs[i].u32 = bs[i].u32 | (uint32_t)1u << (position & 0x1Fu);
 }
 static inline void
 bit64_set(uint64_t bits[],
@@ -201,7 +157,7 @@ bit64_set(uint64_t bits[],
 {
     union bitunion64 *bs = (union bitunion64 *)bits;
     const unsigned i = position >> 6u;
-    bs[i].u64 = bs[i].u64 | (uint64_t)1u << (position - (i << 6u));
+    bs[i].u64 = bs[i].u64 | (uint64_t)1u << (position & 0x3Fu);
 }
 
 static inline void
@@ -210,7 +166,7 @@ bit32_unset(uint32_t bits[],
 {
     union bitunion32 *bs = (union bitunion32 *)bits;
     const unsigned i = position >> 5u;
-    bs[i].u32 = bs[i].u32 & ~((uint32_t)1u << (position - (i << 5u)));
+    bs[i].u32 = bs[i].u32 & ~((uint32_t)1u << (position & 0x1Fu));
 }
 static inline void
 bit64_unset(uint64_t bits[],
@@ -218,7 +174,7 @@ bit64_unset(uint64_t bits[],
 {
     union bitunion64 *bs = (union bitunion64 *)bits;
     const unsigned i = position >> 6u;
-    bs[i].u64 = bs[i].u64 & ~((uint64_t)1u << (position - (i << 6u)));
+    bs[i].u64 = bs[i].u64 & ~((uint64_t)1u << (position & 0x3Fu));
 }
 
 static inline unsigned
@@ -444,36 +400,52 @@ bit64_count(uint64_t v)
 #endif
 }
 
-#define bit_swap16_generic(value) (((((unsigned)(value)) & 0xFF00u) >> 8u) | ((((unsigned)(value)) & 0x00FFu) << 8u))
+static inline uint16_t
+bit16_swap_generic(uint16_t v)
+{
+    return (((unsigned)v & 0xFF00u) >> 8u) | (((unsigned)v & 0x00FFu) << 8u);
+}
+static inline uint16_t
+bit16_swap(uint16_t v)
+{
 #if __has_builtin(__builtin_bswap16)
-#define bit_swap16 __builtin_bswap16
+    return __builtin_bswap16(v);
 #else
-#define bit_swap16 bit_swap16_generic
+    return bit16_swap_generic(v);
 #endif
+}
 
 static inline uint32_t
-bit_swap32_generic(uint32_t v)
+bit32_swap_generic(uint32_t v)
 {
-    return bit_swap16((uint16_t)((v & 0xFFFF0000u ) >> 16u)) |
-        ((uint32_t)bit_swap16((uint16_t)(v & 0x0000FFFFu)) << 16u);
+    return bit16_swap((uint16_t)((v & 0xFFFF0000u ) >> 16u)) |
+        ((uint32_t)bit16_swap((uint16_t)(v & 0x0000FFFFu)) << 16u);
 }
+static inline uint32_t
+bit32_swap(uint32_t v)
+{
 #if __has_builtin(__builtin_bswap32)
-#define bit_swap32 __builtin_bswap32
+    return __builtin_bswap32(v);
 #else
-#define bit_swap32 bit_swap32_generic
+    return bit32_swap_generic(v);
 #endif
+}
 
 static inline uint64_t
-bit_swap64_generic(uint64_t v)
+bit64_swap_generic(uint64_t v)
 {
-    return bit_swap32((uint32_t)((v & 0xFFFFFFFF00000000u ) >> 32u)) |
-        ((uint64_t)bit_swap32((uint32_t)(v & 0xFFFFFFFFu)) << 32u);
+    return bit32_swap((uint32_t)((v & 0xFFFFFFFF00000000u ) >> 32u)) |
+        ((uint64_t)bit32_swap((uint32_t)(v & 0xFFFFFFFFu)) << 32u);
 }
+static inline uint64_t
+bit64_swap(uint64_t v)
+{
 #if __has_builtin(__builtin_bswap64)
-#define bit_swap64 __builtin_bswap64
+    return __builtin_bswap64(v);
 #else
-#define bit_swap64 bit_swap64_generic
+    return bit64_swap_generic(v);
 #endif
+}
 
 static inline void
 barr32_set(uint32_t bits[],
@@ -1082,4 +1054,226 @@ barr64_notbsr(const uint64_t bits[],
     return -1;
 }
 
+#define BITOPS_CONCAT_EVAL_(a, b) a ## b
+#define BITOPS_CONCAT_(a, b) BITOPS_CONCAT_EVAL_(a, b)
+#define BITOPS_FUN_(name) BITOPS_CONCAT_(BITOPS_CONCAT_(BITOPS_PREFIX, _), name)
+#define BITOPS_BARR_FUN_(name) BITOPS_CONCAT_(BITOPS_CONCAT_(BITOPS_BARR_PREFIX, _), name)
+#define BITOPS_INNER_FUN_(name) BITOPS_CONCAT_(BITOPS_CONCAT_(BITOPS_CONCAT_(bit, BITOPS_TYPE_WIDTH), _), name)
+#define BITOPS_INNER_BARR_FUN_(name) BITOPS_CONCAT_(BITOPS_CONCAT_(BITOPS_CONCAT_(barr, BITOPS_TYPE_WIDTH), _), name)
+
 #endif // BITOPS_H
+
+#ifdef BITOPS_PREFIX
+
+#ifndef BITOPS_TYPE_WIDTH
+#if BITOPS_TYPE_MAX == 2147483647 || BITOPS_TYPE_MAX == 4294967295u
+#define BITOPS_TYPE_WIDTH 32
+#elif BITOPS_TYPE_MAX == 9223372036854775807 || BITOPS_TYPE_MAX == 18446744073709551615u
+#define BITOPS_TYPE_WIDTH 64
+#else
+ #error "Unsupported BITOPS_TYPE_MAX value"
+#endif
+#endif // BITOPS_TYPE_WIDTH
+
+#ifndef BITOPS_TYPE_WIDTH
+ #error "BITOPS_TYPE_WIDTH or BITMOPS_TYPE_MAX not defined"
+#endif
+
+#if BITOPS_TYPE_WIDTH == 32
+#define BITOPS_INNER_TYPE_ uint32_t
+#elif BITOPS_TYPE_WIDTH == 64
+#define BITOPS_INNER_TYPE_ uint64_t
+#else
+ #error "Unsupported BITOPS_TYPE_WIDTH value"
+#endif
+
+static inline void
+BITOPS_FUN_(sizeof_verify_)(void)
+{
+    // if compile error occurs here, the BITOPS_TYPE does not match BITOPS_TYPE_WIDTH
+    switch (0) {
+    case 0: break;
+    case (BITOPS_TYPE_WIDTH == sizeof(BITOPS_TYPE) * 8): break;
+    }
+}
+
+static inline int
+BITOPS_FUN_(isset)(const BITOPS_TYPE bits[],
+                   const unsigned position)
+{
+    return BITOPS_INNER_FUN_(isset)((const BITOPS_INNER_TYPE_ *)bits, position);
+}
+
+
+static inline void
+BITOPS_FUN_(set)(BITOPS_TYPE bits[],
+                 const unsigned position)
+{
+    BITOPS_INNER_FUN_(set)((BITOPS_INNER_TYPE_ *)bits, position);
+}
+
+static inline void
+BITOPS_FUN_(unset)(BITOPS_TYPE bits[],
+                   const unsigned position)
+{
+    BITOPS_INNER_FUN_(unset)((BITOPS_INNER_TYPE_ *)bits, position);
+}
+
+static inline unsigned
+BITOPS_FUN_(bsf)(const BITOPS_TYPE value)
+{
+    return BITOPS_INNER_FUN_(bsf)((const BITOPS_INNER_TYPE_)value);
+}
+
+static inline unsigned
+BITOPS_FUN_(bsr)(const BITOPS_TYPE value)
+{
+    return BITOPS_INNER_FUN_(bsr)((const BITOPS_INNER_TYPE_)value);
+}
+
+static inline BITOPS_TYPE
+BITOPS_FUN_(rev)(const BITOPS_TYPE value)
+{
+    return (BITOPS_TYPE)BITOPS_INNER_FUN_(rev)((const BITOPS_INNER_TYPE_)value);
+}
+
+static inline unsigned
+BITOPS_FUN_(count)(const BITOPS_TYPE value)
+{
+    return BITOPS_INNER_FUN_(count)((const BITOPS_INNER_TYPE_)value);
+}
+
+static inline BITOPS_TYPE
+BITOPS_FUN_(swap)(const BITOPS_TYPE value)
+{
+    return (BITOPS_TYPE)BITOPS_INNER_FUN_(swap)((const BITOPS_INNER_TYPE_)value);
+}
+
+#ifdef BITOPS_BARR_PREFIX
+
+static inline void
+BITOPS_BARR_FUN_(set)(BITOPS_TYPE bits[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(set)((BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(unset)(BITOPS_TYPE bits[],
+                        const unsigned from,
+                        const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(unset)((BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(not)(BITOPS_TYPE bits[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(not)((BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(and)(BITOPS_TYPE destination[],
+                      const BITOPS_TYPE source[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(and)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+static inline void
+BITOPS_BARR_FUN_(nand)(BITOPS_TYPE destination[],
+                       const BITOPS_TYPE source[],
+                       const unsigned from,
+                       const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(nand)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(or)(BITOPS_TYPE destination[],
+                     const BITOPS_TYPE source[],
+                     const unsigned from,
+                     const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(or)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(nor)(BITOPS_TYPE destination[],
+                      const BITOPS_TYPE source[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(nor)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(xor)(BITOPS_TYPE destination[],
+                      const BITOPS_TYPE source[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(xor)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+
+static inline void
+BITOPS_BARR_FUN_(xnor)(BITOPS_TYPE destination[],
+                       const BITOPS_TYPE source[],
+                       const unsigned from,
+                       const unsigned to)
+{
+    BITOPS_INNER_BARR_FUN_(xnor)((BITOPS_INNER_TYPE_ *)destination, (const BITOPS_INNER_TYPE_ *)source, from, to);
+}
+
+static inline unsigned
+BITOPS_BARR_FUN_(count)(const BITOPS_TYPE bits[],
+                        const unsigned from,
+                        const unsigned to)
+{
+    return BITOPS_INNER_BARR_FUN_(count)((const BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline int
+BITOPS_BARR_FUN_(bsf)(const BITOPS_TYPE bits[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    return BITOPS_INNER_BARR_FUN_(bsf)((const BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline int
+BITOPS_BARR_FUN_(bsr)(const BITOPS_TYPE bits[],
+                      const unsigned from,
+                      const unsigned to)
+{
+    return BITOPS_INNER_BARR_FUN_(bsr)((const BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline int
+BITOPS_BARR_FUN_(notbsf)(const BITOPS_TYPE bits[],
+                         const unsigned from,
+                         const unsigned to)
+{
+    return BITOPS_INNER_BARR_FUN_(notbsf)((const BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+static inline int
+BITOPS_BARR_FUN_(notbsr)(const BITOPS_TYPE bits[],
+                         const unsigned from,
+                         const unsigned to)
+{
+    return BITOPS_INNER_BARR_FUN_(notbsr)((const BITOPS_INNER_TYPE_ *)bits, from, to);
+}
+
+#endif // BITOPS_BARR_PREFIX
+
+#undef BITOPS_INNER_TYPE_
+#undef BITOPS_PREFIX
+#undef BITOPS_BARR_PREFIX
+#undef BITOPS_TYPE
+#undef BITOPS_TYPE_MAX
+#undef BITOPS_TYPE_WIDTH
+#endif // BITOPS_PREFIX

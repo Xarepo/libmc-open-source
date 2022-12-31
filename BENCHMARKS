@@ -1,0 +1,243 @@
+
+BENCHMARKS
+----------
+
+The package contains the software mc_perftest_* which you can use to
+test performance of the containers in various configurations. For
+insert and erase operations, memory allocation is key for good
+performance, and using the optional built-in node allocator as done in
+these tests will significantly improve performance. For the radix tree
+efficient node packing and branch scanning is key.
+
+Here are a few benchmark examples run on large trees, 100000 keys
+active at start of the test, and then the test is run on 100000
+additional keys on top (only 10 keys for the disabled cache case due
+to runtimes). Random access pattern is used here, but there are other
+patters that can be tested too.
+
+The test platform is 64 bit Intel Xeon CPU E5-2640 v2 @ 2.00GHz,
+numbers are clock cycles, average with the 99th percentile excluded
+(which in practice means system calls to fetch a new block of RAM
+is excluded.)
+
+For reference, C++ STL std::map 64 bit key, 64 bit value (it is a
+red-black tree):
+./build/mc_perftest_stlmap 100000 100000 random 0 0 1
+    insert: 1075 (1.4x - 3.2x slower than the others)
+  find-hit: 959  (1.4x - 5.0x slower than the others)
+ find-miss: 1574 (2.3x - 17 x slower than the others)
+     erase: 1357 (2.0x - 2.9x slower than the others)
+
+Comment: C++ STL map is significantly slower than the others, one
+explanation is a slow allocator, but as also find is slower it's not
+the complete answer. This is GNU's standard library implementation.
+
+Red-black tree (mrb) 64 bit key, 64 bit value:
+./build/mc_perftest_mrb 100000 100000 random 0 0 1
+    insert: 766 (std::map is 1.4x slower, but 1.8x slower than mrx)
+  find-hit: 691 (std::map is 1.4x slower, but 3.6x slower than mrx)
+ find-miss: 680 (std::map is 2.3x slower, but 7.5x slower than mrx)
+     erase: 663 (std::map is 2.0x slower, but 1.4x slower than mrx)
+
+Comment: same algorithm as C++ std::map, ie same amount of nodes,
+but still significantly faster. Probably due to better node
+packing and node allocator. As expected, significantly slower than the
+radix trees though as the red-black tree needs many more nodes. Most
+difference is seen is find, insert/erase less so as radix trees while
+fewer nodes need larger and more complex ones.
+
+Radix-tree (mrx) 64 bit key, 64 bit value:
+./build/mc_perftest_mrx_int 100000 100000 random 0 0 1
+    insert: 433 (1.3x slower than fastest which is JUDY)
+  find-hit: 193 (fastest, next is JUDY 1.2x slower)
+ find-miss: 90  (fastest, next is JUDY 2.1x slower)
+     erase: 485 (about same as fastest JUDY)
+
+Comment: performance similar to JUDY.
+
+JUDY (other open source radix tree) 64 bit key, 64 bit value:
+./build/mc_perftest_judy_int 100000 100000 random 0 0 1
+    insert: 336 (fastest, next is mrx 1.3x slower)
+  find-hit: 232 (1.2x slower than fastest which is mrx)
+ find-miss: 191 (2.1x slower than fastest which is mrx
+     erase: 472 (fastest, next is mrx only 3% slower)
+
+
+String benchmarks (variable length keys about 40 - 60 characters):
+
+Red-black tree (mrb) string key, 64 bit value:
+./build/mc_perftest_mrb 100000 100000 random 0 0 1
+    insert: 2087 (2.3x - 3.0x slower than the radix trees)
+  find-hit: 1928 (2.7x - 3.9x slower than the radix trees)
+ find-miss: 1596 (2.9x - 3.3x slower than the radix trees)
+     erase: 1153 (2.1x - 2.9x slower than the radix trees)
+
+Comment: red-black trees are not particularly well suited for string
+keys as they need to store the full string key in each node, which
+wastes memory and reduces performance significantly. However, they are
+more all-around if you want for example locale-specific sorting you
+can provide a custom compare function, while the sort order in a
+radix-tree is hard-coded into the tree algorithm.
+
+Radix-tree (mrx) string key, 64 bit value:
+./build/mc_perftest_mrx_int 100000 100000 random 0 0 1
+    insert: 683 (fastest, JUDY is 1.34x slower)
+  find-hit: 495 (fastest, JUDY is 1.44x slower)
+ find-miss: 488 (fastest, JUDY is 1.14x slower)
+     erase: 403 (fastest, JUDY is 1.35x slower)
+
+Comment: Mrx uses same implementation for both integer and string
+keys, while JUDY has one specific for integers. While insert/erase is
+a bit slower for mrx in the integer case, here with strings it wins
+out in all cases. The margin is not huge though, both are highly
+optimized radix trees. The better performance here is likely due to
+better node alignment and faster prefix scanning.
+
+JUDY (other open source radix tree) string key, 64 bit value:
+./build/mc_perftest_judy_int 100000 100000 random 0 0 1
+    insert: 918 (1.34x slower than mrx)
+  find-hit: 714 (1.44x slower than mrx)
+ find-miss: 559 (1.14x slower than mrx)
+     erase: 548 (1.35x slower than mrx)
+
+
+Below comes the same benchmarks, but with cache disabled. This will
+reduce performance 10x times and is not a realistic scenario, but will
+give and advantage to data structures that access little memory. In a
+real situation when the software is running all sorts of code the data
+structures cannot expect to be as well-cached as in a benchmark. By
+accessing little memory its own performance is improved, and the cache
+is also less polluted by the data structure leaving more to the rest
+of the program. Note that both data and code cache is dropped, so the
+radix tree will suffer a bit from having more complex code.
+
+For reference, C++ STL std::map 64 bit key, 64 bit value
+./build/mc_perftest_stlmap 100000 10 random 1 0 1
+    insert: 15048 (1.6x - 2.5x slower than the others)
+  find-hit: 6792  (1.4x - 1.7x slower than the others)
+ find-miss: 18054 (4.0x - 4.6x slower than the others)
+     erase: 12128 (1.0x - 2.0x slower than the others)
+
+Comment: similar difference to the mrb tree, but less to the radix
+trees than in the cached case.
+
+Red-black tree (mrb) 64 bit key, 64 bit value:
+./build/mc_perftest_mrb 100000 10 random 1 0 1
+    insert: 6066 (fastest, next is JUDY 1.5x slower)
+  find-hit: 4770 (std::map is 1.4x slower, but 1.17x slower than mrx)
+ find-miss: 4470 (std::map is 4.0x slower, but 1.14x slower than mrx)
+     erase: 6144 (fastest, next is std::map 2.0x slower)
+
+Comment: the larger amount code loaded to perform an insert/erase cost
+the radix trees their victories here. Find performance of mrb is
+similar too, again likely due to compensating more data loads with
+less code loads.
+
+Radix-tree (mrx) 64 bit key, 64 bit value:
+./build/mc_perftest_mrx_int 100000 10 random 1 0 1
+    insert: 9537 (1.6x slower than mrb)
+  find-hit: 4088 (fastest, next is mrb 1.17x slower)
+ find-miss: 3932 (fastest, next is JUDY 1.12x slower)
+     erase: 9149 (1.5x slower than mrb)
+
+JUDY (other open source radix tree) 64 bit key, 64 bit value:
+./build/mc_perftest_judy_int 100000 10 random 1 0 1
+    insert: 9338 (1.5x slower than mrb)
+  find-hit: 4990 (1.2x slower than mrx)
+ find-miss: 4401 (1.12x slower than mrx)
+     erase: 12304 (2.0x slower than mrb)
+
+Comment: the slow erase is notable, much more so than in the cached
+case where it performs same as mrx. The worse performance here is
+probably due to large code complexity.
+
+
+String benchmarks:
+
+Red-black tree (mrb) string key, 64 bit value:
+./build/mc_perftest_mrb 100000 10 random 1 0 1
+    insert: 17248 (1.2x - 2.0x slower than the radix trees)
+  find-hit: 8384  (0.9x - 2.3x slower than the radix trees)
+ find-miss: 8542  (1.4x - 1.6x slower than the radix trees)
+     erase: 8420  (1.2x - 1.9x slower than the radix trees)
+
+Comment: less difference than in the cached case, and actually faster
+find than JUDY.
+
+Radix-tree (mrx) string key, 64 bit value:
+./build/mc_perftest_mrx_int 100000 10 random 1 0 1
+    insert: 8547 (fastest, JUDY is 1.7x slower)
+  find-hit: 3652 (fastest, JUDY is 2.5x slower)
+ find-miss: 3243 (fastest, JUDY is 1.9x slower)
+     erase: 4340 (fastest, JUDY is 1.6x slower)
+
+Comment: mrx quite significantly increases the margin to JUDY compared
+to the benchmark with cache activated. Maybe due to better node
+alignment and less code. Interestingly, all the performance numbers
+are actually better than in the integer key case, this is probably
+due to less use of high branch count nodes.
+
+JUDY (other open source radix tree) string key, 64 bit value:
+./build/mc_perftest_judy_int 100000 10 random 1 0 1
+    insert: 14456 (1.7x slower than mrx)
+  find-hit: 8997 (2.5x slower than mrx)
+ find-miss: 6097 (1.9x slower than mrx)
+     erase: 6820 (1.6x slower than mrx)
+
+Comment: slower than the integer case, except for erase which is
+significantly faster. Again, this is probably due to the less
+occurance of nodes with high branch counts due to the larger spread of
+keys.
+
+
+Hash tables
+-----------
+
+Naturally, an unsorted hash table has much better performance than any
+tree if the use case is right. That is when you can pre-allocate the
+full table size, the keys are easy to hash, and you don't need to
+iterate through the values or have the values sorted. Here are two
+examples:
+
+For reference, C++ STL std::umap 64 bit key, 64 bit value
+./build/mc_perftest_stlumap 10000 0 100000 random 0 0 1
+    insert: 291 (10 x slower than mht)
+  find-hit: 87  (1.5x slower than mht)
+ find-miss: 420 (4.6x slower than mht)
+     erase: 339 (5.8x slower than mht)
+
+Comment: significantly slower than mht, but as it supports dynamic
+memory unlike the mht hash table they are not fully comparable.
+
+Single-hashed open-addressed hashtable (mht) 64 bit key, 64 bit value:
+./build/mc_perftest_stlumap 100000 100000 random 0 0 1
+    insert: 29
+  find-hit: 58
+ find-miss: 91
+     erase: 58
+
+Comment: the very low clock cycle counts means that the ideal cases
+are triggered which basically leads just to a hash calculation and a
+direct hit in the array. Erase sometimes leads to a (local) rehash,
+but not too bad.
+
+Same tests with cache disabled:
+
+For reference, C++ STL std::umap 64 bit key, 64 bit value
+./build/mc_perftest_stlumap 10000 0 10 random 1 0 1
+    insert: 7152 (13 x slower than mht)
+  find-hit: 1624 (2.3x slower than mht)
+ find-miss: 7979 (12 x slower than mht)
+     erase: 4562 (4.4x slower than mht)
+
+Single-hashed open-addressed hashtable (mht) 64 bit key, 64 bit value:
+./build/mc_perftest_stlumap 100000 10 random 1 0 1
+    insert: 556
+  find-hit: 708
+ find-miss: 643
+     erase: 1020
+
+This library does not provide dynamic memory management for hash
+tables, as it's assumed that in those use cases a tree is nearly
+always better. The hash table is intented to be used in low complexity
+situations where the worst case situation is easy to assess.

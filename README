@@ -60,6 +60,13 @@ Do you want to generate custom versions of the data types? See
 src/examples/example_advanced.c
 
 
+BENCHMARKS
+----------
+
+See separate file "BENCHMARKS" to get some performance numbers and
+comparisons for some of the provided containers.
+
+
 LIMITATIONS
 -----------
 

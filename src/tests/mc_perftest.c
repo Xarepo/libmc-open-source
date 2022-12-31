@@ -118,7 +118,7 @@ write_tsa(uint64_t tsa[],
     }
     */
 
-    min = ~0;
+    min = ~(uint64_t)0u;
     max = 0;
     tot = 0;
     for (i = 0; i < count; i++) {
@@ -144,11 +144,17 @@ write_tsa(uint64_t tsa[],
     p99 = tsa[(99 * count) / 100];
 
     // avg_p99: average with p99 excluded
-    while (tsa[count-1] >= p99 && count > 0) {
-        tot -= tsa[count-1];
-        count--;
+    if (tot > 0 && tsa[0] < p99) {
+        uint64_t count1 = count;
+        uint64_t tot1 = tot;
+        while (tsa[count1-1] >= p99) {
+            tot1 -= tsa[count1-1];
+            count1--;
+        }
+        avg_p99 = tot1 / count1;
+    } else {
+        avg_p99 = tot / count;
     }
-    avg_p99 = tot / count;
 
     fprintf(stderr, "%20s:\tavg %5lld; avg99 %5lld; mean %5lld; p90 %5lld; p99 %5lld; "
             "min %5lld; max %8lld; tot %10lld\n",

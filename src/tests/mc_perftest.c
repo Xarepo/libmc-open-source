@@ -144,7 +144,7 @@ write_tsa(uint64_t tsa[],
     p99 = tsa[(99 * count) / 100];
 
     // avg_p99: average with p99 excluded
-    while (tsa[count-1] >= p99) {
+    while (tsa[count-1] >= p99 && count > 0) {
         tot -= tsa[count-1];
         count--;
     }
